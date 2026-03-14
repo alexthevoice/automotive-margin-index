@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 
-const VERSION = "1.106";
+const VERSION = "1.107";
 
 const STEPS = [
   { id: 0, label: "Anagrafica", icon: "◆" },
@@ -278,7 +278,7 @@ function StepAnagrafica({ data, updateField }) {
   return (<div>
     <InputField label="Ragione sociale" value={data.ragione_sociale} onChange={v => updateField('ragione_sociale', v)} placeholder="Es. Auto Group S.r.l." />
     <SelectField label="Provincia" value={data.provincia} onChange={v => updateField('provincia', v)} options={PROVINCE} />
-    <SelectField label="Tipologia concessionaria" value={data.tipologia} onChange={v => updateField('tipologia', v)} options={[{ value: "dealer_ufficiale", label: "Dealer Ufficiale" }, { value: "multimarca", label: "Multimarca" }]} />
+    <SelectField label="Tipologia concessionaria" value={data.tipologia} onChange={v => updateField('tipologia', v)} options={[{ value: "Dealer Ufficiale", label: "Dealer Ufficiale" }, { value: "Multimarca", label: "Multimarca" }]} />
     <InputField label="Volume annuo vendite" hint="Totale veicoli venduti nell'ultimo anno" value={data.volume_vendite} onChange={v => updateField('volume_vendite', v)} type="number" suffix="unità" placeholder="800" />
     <InputField label="Numero sedi operative" value={data.sedi} onChange={v => updateField('sedi', v)} type="number" placeholder="2" />
     <InputField label="Numero venditori" hint="Solo forza vendita attiva" value={data.venditori} onChange={v => updateField('venditori', v)} type="number" placeholder="8" />
