@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 
-const VERSION = "1.111";
+const VERSION = "1.113";
 
 const STEPS = [
   { id: 0, label: "Anagrafica", icon: "◆" },
@@ -158,9 +158,10 @@ function getInsights(scores, data) {
    AIRTABLE SUBMISSION
    ═══════════════════════════════════════ */
 
-async function submitToAirtable(data, scores) {
+async function submitToAirtable(data, scores, dealerId) {
   const classe = getClasse(scores.ami);
   const payload = {
+    _dealer_id: dealerId,
     Ragione_Sociale: data.ragione_sociale,
     Provincia: data.provincia,
     Tipologia: data.tipologia,
@@ -170,7 +171,6 @@ async function submitToAirtable(data, scores) {
     Addetti: parseInt(data.addetti) || 0,
     Margine_Veicolo: parseFloat(data.margine_veicolo) || 0,
     Margine_Servizi: parseFloat(data.margine_servizi) || 0,
-    // Margine_Totale è formula su Airtable, non lo inviamo
     Penetrazione_Fin: parseFloat(data.penetrazione_fin) || 0,
     Penetrazione_Ass: parseFloat(data.penetrazione_ass) || 0,
     Penetrazione_Gar: parseFloat(data.penetrazione_gar) || 0,
@@ -196,7 +196,7 @@ async function submitToAirtable(data, scores) {
     });
     const result = await res.json();
     if (!res.ok) throw new Error(result.error || 'Errore invio dati');
-    return { success: true };
+    return { success: true, crediti_rimanenti: result.crediti_rimanenti };
   } catch (err) {
     console.error('Airtable submission error:', err);
     return { success: false, error: err.message };
@@ -464,13 +464,14 @@ function ResultsDashboard({ scores, insights, data, animate, onReset, containerR
         {airtableStatus && (
           <div style={{
             padding: '10px 16px', borderRadius: 8, marginBottom: 16, fontSize: 12,
-            background: airtableStatus === 'success' ? 'rgba(77,175,106,0.1)' : airtableStatus === 'error' ? 'rgba(212,64,64,0.1)' : 'rgba(232,168,56,0.1)',
-            color: airtableStatus === 'success' ? '#4DAF6A' : airtableStatus === 'error' ? '#D44040' : C.gold,
-            border: `1px solid ${airtableStatus === 'success' ? 'rgba(77,175,106,0.3)' : airtableStatus === 'error' ? 'rgba(212,64,64,0.3)' : 'rgba(232,168,56,0.3)'}`,
+            background: airtableStatus === 'success' ? 'rgba(77,175,106,0.1)' : (airtableStatus === 'error' || airtableStatus === 'no_credits') ? 'rgba(212,64,64,0.1)' : 'rgba(232,168,56,0.1)',
+            color: airtableStatus === 'success' ? '#4DAF6A' : (airtableStatus === 'error' || airtableStatus === 'no_credits') ? '#D44040' : C.gold,
+            border: `1px solid ${airtableStatus === 'success' ? 'rgba(77,175,106,0.3)' : (airtableStatus === 'error' || airtableStatus === 'no_credits') ? 'rgba(212,64,64,0.3)' : 'rgba(232,168,56,0.3)'}`,
           }}>
-            {airtableStatus === 'success' && '✓ Dati salvati correttamente'}
+            {airtableStatus === 'success' && '✓ Dati salvati correttamente · 100 crediti utilizzati'}
             {airtableStatus === 'sending' && '◌ Salvataggio in corso...'}
             {airtableStatus === 'error' && '✗ Errore nel salvataggio (i risultati sono comunque visibili)'}
+            {airtableStatus === 'no_credits' && '✗ Crediti insufficienti — servono 100 crediti. Ricarica per salvare i risultati.'}
           </div>
         )}
 
@@ -643,6 +644,7 @@ export default function App() {
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
   const [dealer, setDealer] = useState(null);
+  const [crediti, setCrediti] = useState(0);
 
   // App state
   const [currentStep, setCurrentStep] = useState(-1);
@@ -698,6 +700,7 @@ export default function App() {
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || 'Codice non valido');
       setDealer(result.dealer);
+      setCrediti(result.dealer.crediti_rimanenti || 0);
       // Pre-fill form with dealer data, matching select options
       const matchProvincia = PROVINCE.find(p => p.toLowerCase() === (result.dealer.provincia || '').toLowerCase()) || '';
       const tipMap = { 'dealer ufficiale': 'Dealer Ufficiale', 'dealer': 'Dealer Ufficiale', 'monomarca': 'Dealer Ufficiale', 'multimarca': 'Multimarca', 'multi marca': 'Multimarca' };
@@ -724,10 +727,15 @@ export default function App() {
     setAuthOtp('');
     setAuthError('');
     setDealer(null);
+    setCrediti(0);
     handleReset();
   };
 
   const handleSubmit = async () => {
+    if (crediti < 100) {
+      setAirtableStatus('no_credits');
+      return;
+    }
     const s = calculateScores(data);
     const i = getInsights(s, data);
     setScores(s);
@@ -735,8 +743,13 @@ export default function App() {
     setShowResults(true);
     setAirtableStatus('sending');
     setTimeout(() => setAnimateScore(true), 300);
-    const result = await submitToAirtable(data, s);
-    setAirtableStatus(result.success ? 'success' : 'error');
+    const result = await submitToAirtable(data, s, dealer?.id);
+    if (result.success) {
+      setAirtableStatus('success');
+      setCrediti(result.crediti_rimanenti ?? crediti - 100);
+    } else {
+      setAirtableStatus(result.error?.includes('Crediti insufficienti') ? 'no_credits' : 'error');
+    }
     const r = await fetchRankings(s);
     setRankings(r);
   };
@@ -853,12 +866,20 @@ export default function App() {
       <div style={{ maxWidth: 640, margin: '0 auto', padding: '24px 20px 20px', textAlign: 'center', paddingTop: 40 }}>
         <Header />
         {dealer && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: C.bgLight, border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 16px', marginBottom: 24 }}>
-            <div style={{ textAlign: 'left' }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: C.white }}>{dealer.nome || dealer.email}</div>
-              <div style={{ fontSize: 11, color: C.textMuted }}>{dealer.email}</div>
+          <div style={{ background: C.bgLight, border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 16px', marginBottom: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ textAlign: 'left' }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: C.white }}>{dealer.nome || dealer.email}</div>
+                <div style={{ fontSize: 11, color: C.textMuted }}>{dealer.email}</div>
+              </div>
+              <button onClick={handleLogout} style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 12px', color: C.textSecondary, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>Esci</button>
             </div>
-            <button onClick={handleLogout} style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 12px', color: C.textSecondary, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>Esci</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
+              <span style={{ fontSize: 11, color: C.textSecondary }}>Crediti disponibili:</span>
+              <span style={{ fontSize: 14, fontWeight: 800, color: crediti >= 100 ? C.gold : '#D44040' }}>{crediti}</span>
+              {crediti < 150 && crediti >= 100 && <span style={{ fontSize: 10, color: '#E8923F' }}>· quasi esauriti</span>}
+              {crediti < 100 && <span style={{ fontSize: 10, color: '#D44040' }}>· insufficienti</span>}
+            </div>
           </div>
         )}
         <div style={{ background: C.cardBg, borderRadius: 14, padding: '32px 28px', textAlign: 'left', color: C.cardText }}>
@@ -872,8 +893,22 @@ export default function App() {
               </div>
             ))}
           </div>
-          <button onClick={() => setCurrentStep(0)} style={{ padding: '16px 40px', background: C.gold, border: 'none', borderRadius: 10, color: C.bg, fontSize: 15, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', letterSpacing: 0.5, marginTop: 24, width: '100%' }}>Avvia il questionario</button>
-          <div style={{ marginTop: 16, fontSize: 12, color: C.cardTextLight, textAlign: 'center' }}>Compilazione: ~5 minuti · Dati trattati in forma anonima e riservata</div>
+          {crediti >= 100 ? (
+            <button onClick={() => setCurrentStep(0)} style={{ padding: '16px 40px', background: C.gold, border: 'none', borderRadius: 10, color: C.bg, fontSize: 15, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', letterSpacing: 0.5, marginTop: 24, width: '100%' }}>Avvia il questionario</button>
+          ) : (
+            <div style={{ marginTop: 24 }}>
+              <div style={{ background: 'rgba(212,64,64,0.08)', border: '1px solid rgba(212,64,64,0.2)', borderRadius: 10, padding: '16px', textAlign: 'center' }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#D44040', marginBottom: 6 }}>Crediti insufficienti</div>
+                <div style={{ fontSize: 13, color: C.cardTextLight, lineHeight: 1.5, marginBottom: 4 }}>Servono 100 crediti per compilare il questionario. Hai {crediti} crediti disponibili.</div>
+                <div style={{ fontSize: 13, color: C.cardTextLight, lineHeight: 1.5 }}>Ricarica i tuoi crediti o contatta il tuo consulente.</div>
+                <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 14, flexWrap: 'wrap' }}>
+                  <a href="https://www.paypal.com/paypalme/alexthevoice" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 24px', background: '#0070BA', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 700, textDecoration: 'none', fontFamily: 'inherit' }}>Ricarica con PayPal →</a>
+                  <a href="https://alessandrotasso.it/appuntamento-automotive" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 24px', background: 'transparent', border: `1px solid ${C.inputBorder}`, borderRadius: 8, color: C.cardTextLight, fontSize: 13, fontWeight: 600, textDecoration: 'none', fontFamily: 'inherit' }}>Contatta il consulente</a>
+                </div>
+              </div>
+            </div>
+          )}
+          {crediti >= 100 && <div style={{ marginTop: 16, fontSize: 12, color: C.cardTextLight, textAlign: 'center' }}>Compilazione: ~5 minuti · Questa analisi consuma 100 crediti</div>}
         </div>
       </div>
       <Footer />
