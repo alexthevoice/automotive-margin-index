@@ -33,8 +33,9 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Errore verifica crediti' });
     }
 
-    const crediti_rimanenti = dealerData.fields?.Crediti_Rimanenti || 0;
+    const crediti_totali = dealerData.fields?.Crediti_Totali || 0;
     const crediti_usati = dealerData.fields?.Crediti_Usati || 0;
+    const crediti_rimanenti = crediti_totali - crediti_usati;
 
     if (crediti_rimanenti < 100) {
       return res.status(403).json({

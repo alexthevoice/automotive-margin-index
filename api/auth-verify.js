@@ -59,6 +59,10 @@ export default async function handler(req, res) {
       }),
     });
 
+    const creditiTotali = fields.Crediti_Totali || 0;
+    const creditiUsati = fields.Crediti_Usati || 0;
+    const creditiRimanenti = creditiTotali - creditiUsati;
+
     return res.status(200).json({
       success: true,
       dealer: {
@@ -70,6 +74,9 @@ export default async function handler(req, res) {
         numero_sedi: fields.Numero_Sedi || '',
         referente: fields.Referente || '',
         telefono: fields.Telefono || '',
+        crediti_totali: creditiTotali,
+        crediti_usati: creditiUsati,
+        crediti_rimanenti: creditiRimanenti,
       }
     });
 
