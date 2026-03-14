@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 
-const VERSION = "1.109";
+const VERSION = "1.110";
 
 const STEPS = [
   { id: 0, label: "Anagrafica", icon: "◆" },
@@ -636,6 +636,15 @@ function ResultsDashboard({ scores, insights, data, animate, onReset, containerR
    ═══════════════════════════════════════ */
 
 export default function App() {
+  // Auth state
+  const [authScreen, setAuthScreen] = useState('login'); // 'login' | 'otp' | 'authenticated'
+  const [authEmail, setAuthEmail] = useState('');
+  const [authOtp, setAuthOtp] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+  const [dealer, setDealer] = useState(null);
+
+  // App state
   const [currentStep, setCurrentStep] = useState(-1);
   const [showResults, setShowResults] = useState(false);
   const [animateScore, setAnimateScore] = useState(false);
@@ -655,6 +664,65 @@ export default function App() {
   const updateField = (f, v) => setData(p => ({ ...p, [f]: v }));
   const togglePerdita = (opt) => setData(p => ({ ...p, perdita_margine: p.perdita_margine.includes(opt) ? p.perdita_margine.filter(o => o !== opt) : [...p.perdita_margine, opt] }));
 
+  // Auth handlers
+  const handleSendOtp = async () => {
+    if (!authEmail.trim()) { setAuthError('Inserisci la tua email'); return; }
+    setAuthLoading(true);
+    setAuthError('');
+    try {
+      const res = await fetch('/api/auth-send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: authEmail.trim() }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Errore invio codice');
+      setAuthScreen('otp');
+    } catch (err) {
+      setAuthError(err.message);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (!authOtp.trim()) { setAuthError('Inserisci il codice'); return; }
+    setAuthLoading(true);
+    setAuthError('');
+    try {
+      const res = await fetch('/api/auth-verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: authEmail.trim(), code: authOtp.trim() }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Codice non valido');
+      setDealer(result.dealer);
+      // Pre-fill form with dealer data
+      setData(prev => ({
+        ...prev,
+        ragione_sociale: result.dealer.nome || '',
+        provincia: result.dealer.provincia || '',
+        tipologia: result.dealer.tipologia || '',
+        sedi: result.dealer.numero_sedi ? String(result.dealer.numero_sedi) : '',
+      }));
+      setAuthScreen('authenticated');
+    } catch (err) {
+      setAuthError(err.message);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    setAuthScreen('login');
+    setAuthEmail('');
+    setAuthOtp('');
+    setAuthError('');
+    setDealer(null);
+    handleReset();
+  };
+
   const handleSubmit = async () => {
     const s = calculateScores(data);
     const i = getInsights(s, data);
@@ -665,8 +733,6 @@ export default function App() {
     setTimeout(() => setAnimateScore(true), 300);
     const result = await submitToAirtable(data, s);
     setAirtableStatus(result.success ? 'success' : 'error');
-
-    // Fetch rankings after submit
     const r = await fetchRankings(s);
     setRankings(r);
   };
@@ -674,10 +740,10 @@ export default function App() {
   const handleReset = () => {
     setCurrentStep(-1); setShowResults(false); setAnimateScore(false); setAirtableStatus(null); setRankings(null);
     setScores(null); setInsights(null);
-    setData({ ragione_sociale: "", provincia: "", tipologia: "", volume_vendite: "", sedi: "", venditori: "", addetti: "", margine_veicolo: "", margine_servizi: "", penetrazione_fin: "", penetrazione_ass: "", penetrazione_gar: "", giorni_stock: "", stock_medio: "", valore_stock: "", autovalutazione: "3", perdita_margine: [], consenso_anonimo: false, consenso_risultati: false });
+    setData({ ragione_sociale: dealer?.nome || "", provincia: dealer?.provincia || "", tipologia: dealer?.tipologia || "", volume_vendite: "", sedi: dealer?.numero_sedi ? String(dealer.numero_sedi) : "", venditori: "", addetti: "", margine_veicolo: "", margine_servizi: "", penetrazione_fin: "", penetrazione_ass: "", penetrazione_gar: "", giorni_stock: "", stock_medio: "", valore_stock: "", autovalutazione: "3", perdita_margine: [], consenso_anonimo: false, consenso_risultati: false });
   };
 
-  useEffect(() => { if (containerRef.current) containerRef.current.scrollTo({ top: 0, behavior: 'smooth' }); }, [currentStep, showResults]);
+  useEffect(() => { if (containerRef.current) containerRef.current.scrollTo({ top: 0, behavior: 'smooth' }); }, [currentStep, showResults, authScreen]);
 
   const canProceed = () => {
     switch (currentStep) {
@@ -690,17 +756,107 @@ export default function App() {
     }
   };
 
-  // ── RESULTS ──
-  if (showResults && scores && insights) return (<><ResultsDashboard scores={scores} insights={insights} data={data} animate={animateScore} onReset={handleReset} containerRef={containerRef} airtableStatus={airtableStatus} rankings={rankings} /><Footer /></>);
+  const pageStyle = { minHeight: '100vh', background: C.bg, color: C.white, fontFamily: "'DM Sans','Helvetica Neue',sans-serif", overflowY: 'auto', paddingBottom: 56 };
 
-  // ── LANDING ──
-  if (currentStep === -1) return (
-    <div ref={containerRef} style={{ minHeight: '100vh', background: C.bg, color: C.white, fontFamily: "'DM Sans','Helvetica Neue',sans-serif", overflowY: 'auto', paddingBottom: 56 }}>
+  // ── LOGIN SCREEN ──
+  if (authScreen === 'login') return (
+    <div ref={containerRef} style={pageStyle}>
       <div style={{ maxWidth: 640, margin: '0 auto', padding: '24px 20px 20px', textAlign: 'center', paddingTop: 60 }}>
         <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 56, height: 56, borderRadius: 14, background: C.gold, fontSize: 18, fontWeight: 900, color: C.bg, letterSpacing: 2, marginBottom: 20 }}>AMI</div>
         <h1 style={{ fontSize: 34, fontWeight: 800, lineHeight: 1.15, color: C.white, margin: '0 0 16px', letterSpacing: -0.5 }}>Automotive Margin Index™</h1>
-        <p style={{ fontSize: 15, color: C.textSecondary, lineHeight: 1.7, marginBottom: 8, maxWidth: 480, margin: '0 auto 8px' }}>Misura la salute economica della tua concessionaria: scopri dove stai performando, dove perdi margine e cosa fare per migliorare.</p>
+        <p style={{ fontSize: 15, color: C.textSecondary, lineHeight: 1.7, maxWidth: 480, margin: '0 auto 8px' }}>Misura la salute economica della tua concessionaria: scopri dove stai performando, dove perdi margine e cosa fare per migliorare.</p>
         <p style={{ fontSize: 13, color: C.textMuted, marginBottom: 32, lineHeight: 1.5 }}>Compila il questionario direzionale per ottenere il tuo score, benchmark e diagnosi personalizzata.</p>
+
+        <div style={{ background: C.cardBg, borderRadius: 14, padding: '32px 28px', textAlign: 'left', color: C.cardText }}>
+          <h2 style={{ fontSize: 22, fontWeight: 700, color: C.cardText, margin: '0 0 6px' }}>Accedi</h2>
+          <p style={{ fontSize: 14, color: C.cardTextLight, lineHeight: 1.5, margin: '0 0 20px' }}>Inserisci la tua email per ricevere il codice di accesso.</p>
+
+          <label style={{ fontSize: 11, fontWeight: 600, color: C.gold, letterSpacing: 1.5, textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>EMAIL</label>
+          <input
+            type="email"
+            value={authEmail}
+            onChange={e => setAuthEmail(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleSendOtp()}
+            placeholder="nome@concessionaria.it"
+            style={{ width: '100%', padding: '14px 16px', background: C.inputBg, border: `1px solid ${C.inputBorder}`, borderRadius: 8, color: C.cardText, fontSize: 15, outline: 'none', fontFamily: 'inherit', marginBottom: 16 }}
+          />
+
+          {authError && (
+            <div style={{ background: 'rgba(212,64,64,0.08)', border: '1px solid rgba(212,64,64,0.2)', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#D44040' }}>{authError}</div>
+          )}
+
+          <button onClick={handleSendOtp} disabled={authLoading} style={{ width: '100%', padding: '16px', background: authLoading ? C.inputBg : C.gold, border: 'none', borderRadius: 10, color: authLoading ? C.cardTextLight : C.bg, fontSize: 15, fontWeight: 800, cursor: authLoading ? 'wait' : 'pointer', fontFamily: 'inherit', letterSpacing: 0.5 }}>
+            {authLoading ? 'Invio in corso...' : 'Invia codice di accesso'}
+          </button>
+
+          <div style={{ borderTop: `1px solid ${C.inputBorder}`, marginTop: 20, paddingTop: 16, textAlign: 'center' }}>
+            <span style={{ fontSize: 13, color: C.cardTextLight }}>Non hai un account? </span>
+            <a href="https://stock-performance-index.vercel.app/" target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: C.gold, fontWeight: 600, textDecoration: 'none' }}>Registrati</a>
+          </div>
+        </div>
+      </div>
+      <Footer />
+    </div>
+  );
+
+  // ── OTP VERIFICATION ──
+  if (authScreen === 'otp') return (
+    <div ref={containerRef} style={pageStyle}>
+      <div style={{ maxWidth: 640, margin: '0 auto', padding: '24px 20px 20px', textAlign: 'center', paddingTop: 60 }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 56, height: 56, borderRadius: 14, background: C.gold, fontSize: 18, fontWeight: 900, color: C.bg, letterSpacing: 2, marginBottom: 20 }}>AMI</div>
+        <h1 style={{ fontSize: 34, fontWeight: 800, lineHeight: 1.15, color: C.white, margin: '0 0 16px', letterSpacing: -0.5 }}>Automotive Margin Index™</h1>
+
+        <div style={{ background: C.cardBg, borderRadius: 14, padding: '32px 28px', textAlign: 'left', color: C.cardText }}>
+          <h2 style={{ fontSize: 22, fontWeight: 700, color: C.cardText, margin: '0 0 6px' }}>Verifica codice</h2>
+          <p style={{ fontSize: 14, color: C.cardTextLight, lineHeight: 1.5, margin: '0 0 4px' }}>Abbiamo inviato un codice a 6 cifre a:</p>
+          <p style={{ fontSize: 14, fontWeight: 600, color: C.cardText, margin: '0 0 20px' }}>{authEmail}</p>
+
+          <label style={{ fontSize: 11, fontWeight: 600, color: C.gold, letterSpacing: 1.5, textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>CODICE DI ACCESSO</label>
+          <input
+            type="text"
+            value={authOtp}
+            onChange={e => setAuthOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            onKeyDown={e => e.key === 'Enter' && authOtp.length === 6 && handleVerifyOtp()}
+            placeholder="000000"
+            maxLength={6}
+            style={{ width: '100%', padding: '14px 16px', background: C.inputBg, border: `1px solid ${C.inputBorder}`, borderRadius: 8, color: C.cardText, fontSize: 24, fontWeight: 700, outline: 'none', fontFamily: 'inherit', marginBottom: 16, textAlign: 'center', letterSpacing: 8 }}
+          />
+
+          {authError && (
+            <div style={{ background: 'rgba(212,64,64,0.08)', border: '1px solid rgba(212,64,64,0.2)', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#D44040' }}>{authError}</div>
+          )}
+
+          <button onClick={handleVerifyOtp} disabled={authLoading || authOtp.length < 6} style={{ width: '100%', padding: '16px', background: (authLoading || authOtp.length < 6) ? C.inputBg : C.gold, border: 'none', borderRadius: 10, color: (authLoading || authOtp.length < 6) ? C.cardTextLight : C.bg, fontSize: 15, fontWeight: 800, cursor: (authLoading || authOtp.length < 6) ? 'not-allowed' : 'pointer', fontFamily: 'inherit', letterSpacing: 0.5 }}>
+            {authLoading ? 'Verifica in corso...' : 'Accedi'}
+          </button>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
+            <button onClick={() => { setAuthScreen('login'); setAuthOtp(''); setAuthError(''); }} style={{ background: 'none', border: 'none', color: C.cardTextLight, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>← Cambia email</button>
+            <button onClick={handleSendOtp} disabled={authLoading} style={{ background: 'none', border: 'none', color: C.gold, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, padding: 0 }}>Reinvia codice</button>
+          </div>
+        </div>
+      </div>
+      <Footer />
+    </div>
+  );
+
+  // ── RESULTS ──
+  if (showResults && scores && insights) return (<><ResultsDashboard scores={scores} insights={insights} data={data} animate={animateScore} onReset={handleReset} containerRef={containerRef} airtableStatus={airtableStatus} rankings={rankings} /><Footer /></>);
+
+  // ── LANDING (authenticated) ──
+  if (currentStep === -1) return (
+    <div ref={containerRef} style={pageStyle}>
+      <div style={{ maxWidth: 640, margin: '0 auto', padding: '24px 20px 20px', textAlign: 'center', paddingTop: 40 }}>
+        <Header />
+        {dealer && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: C.bgLight, border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 16px', marginBottom: 24 }}>
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: C.white }}>{dealer.nome || dealer.email}</div>
+              <div style={{ fontSize: 11, color: C.textMuted }}>{dealer.email}</div>
+            </div>
+            <button onClick={handleLogout} style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 12px', color: C.textSecondary, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>Esci</button>
+          </div>
+        )}
         <div style={{ background: C.cardBg, borderRadius: 14, padding: '32px 28px', textAlign: 'left', color: C.cardText }}>
           <h2 style={{ fontSize: 22, fontWeight: 700, color: C.cardText, margin: '0 0 6px' }}>Inizia l'analisi</h2>
           <p style={{ fontSize: 14, color: C.cardTextLight, lineHeight: 1.5, margin: 0 }}>Compila il questionario in 5 minuti per ricevere il tuo Automotive Margin Index™ e il benchmark direzionale.</p>
@@ -722,7 +878,7 @@ export default function App() {
 
   // ── FORM STEPS ──
   return (
-    <div ref={containerRef} style={{ minHeight: '100vh', background: C.bg, color: C.white, fontFamily: "'DM Sans','Helvetica Neue',sans-serif", overflowY: 'auto', paddingBottom: 56 }}>
+    <div ref={containerRef} style={pageStyle}>
       <div style={{ maxWidth: 620, margin: '0 auto', padding: '24px 20px 20px' }}>
         <Header />
         <ProgressBar current={currentStep} steps={STEPS} />
