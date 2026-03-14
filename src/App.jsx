@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 
-const VERSION = "1.104";
+const VERSION = "1.106";
 
 const STEPS = [
   { id: 0, label: "Anagrafica", icon: "◆" },
@@ -46,7 +46,7 @@ const PERDITA_OPTIONS = [
 ];
 
 const C = {
-  bg: '#0F1C2E', bgLight: '#162236', bgCard: '#1A2A42', border: '#243448', borderLight: '#2D4058',
+  bg: '#133256', bgLight: '#1A3D66', bgCard: '#1F4775', border: '#2A5585', borderLight: '#356294',
   gold: '#E8A838', white: '#FFFFFF', textPrimary: '#FFFFFF', textSecondary: '#8899AA', textMuted: '#5A7088',
   cardBg: '#FFFFFF', cardText: '#1A2A42', cardTextLight: '#5A7088', inputBg: '#F2F4F7', inputBorder: '#D8DDE4',
 };
@@ -71,15 +71,15 @@ function calculateScores(data) {
   const margineServizi = parseFloat(data.margine_servizi) || 0;
   const margineTotale = margineVeicolo + margineServizi;
 
-  const s_mv = normalize(margineVeicolo, 200, 3000, true);
-  const s_ms = normalize(margineServizi, 200, 3000, true);
-  const s_mt = normalize(margineTotale, 500, 6000, true);
+  const s_mv = normalize(margineVeicolo, 200, 2000, true);
+  const s_ms = normalize(margineServizi, 200, 2500, true);
+  const s_mt = normalize(margineTotale, 500, 5000, true);
   const score_marginalita = s_mv * 0.30 + s_ms * 0.30 + s_mt * 0.40;
 
   // Servizi F&I (peso 30%) — penetrazione %
-  const s_fin = normalize(parseFloat(data.penetrazione_fin) || 0, 10, 90, true);
-  const s_ass = normalize(parseFloat(data.penetrazione_ass) || 0, 5, 90, true);
-  const s_gar = normalize(parseFloat(data.penetrazione_gar) || 0, 3, 90, true);
+  const s_fin = normalize(parseFloat(data.penetrazione_fin) || 0, 10, 80, true);
+  const s_ass = normalize(parseFloat(data.penetrazione_ass) || 0, 5, 80, true);
+  const s_gar = normalize(parseFloat(data.penetrazione_gar) || 0, 5, 50, true);
   const score_servizi = s_fin * 0.40 + s_ass * 0.40 + s_gar * 0.20;
 
   // Stock (peso 20%)
@@ -93,11 +93,11 @@ function calculateScores(data) {
   // Produttività (peso 15%)
   const venditori = parseFloat(data.venditori) || 1;
   const vpv = volume / Math.max(venditori, 1);
-  const s_vpv = normalize(vpv, 50, 200, true);
+  const s_vpv = normalize(vpv, 50, 300, true);
   const addetti = parseFloat(data.addetti) || 1;
   const efficienza = volume / Math.max(addetti, 1);
-  const s_eff = normalize(efficienza, 15, 60, true);
-  const score_produttivita = s_vpv * 0.60 + s_eff * 0.40;
+  const s_eff = normalize(efficienza, 10, 100, true);
+  const score_produttivita = s_vpv * 0.70 + s_eff * 0.30;
 
   // AMI finale
   const ami = score_marginalita * WEIGHTS.marginalita + score_servizi * WEIGHTS.servizi + score_stock * WEIGHTS.stock + score_produttivita * WEIGHTS.produttivita;
@@ -278,7 +278,7 @@ function StepAnagrafica({ data, updateField }) {
   return (<div>
     <InputField label="Ragione sociale" value={data.ragione_sociale} onChange={v => updateField('ragione_sociale', v)} placeholder="Es. Auto Group S.r.l." />
     <SelectField label="Provincia" value={data.provincia} onChange={v => updateField('provincia', v)} options={PROVINCE} />
-    <SelectField label="Tipologia concessionaria" value={data.tipologia} onChange={v => updateField('tipologia', v)} options={[{ value: "monomarca", label: "Monomarca" }, { value: "multimarca", label: "Multimarca" }, { value: "gruppo", label: "Gruppo Dealer" }, { value: "usato", label: "Specialista Usato" }]} />
+    <SelectField label="Tipologia concessionaria" value={data.tipologia} onChange={v => updateField('tipologia', v)} options={[{ value: "dealer_ufficiale", label: "Dealer Ufficiale" }, { value: "multimarca", label: "Multimarca" }]} />
     <InputField label="Volume annuo vendite" hint="Totale veicoli venduti nell'ultimo anno" value={data.volume_vendite} onChange={v => updateField('volume_vendite', v)} type="number" suffix="unità" placeholder="800" />
     <InputField label="Numero sedi operative" value={data.sedi} onChange={v => updateField('sedi', v)} type="number" placeholder="2" />
     <InputField label="Numero venditori" hint="Solo forza vendita attiva" value={data.venditori} onChange={v => updateField('venditori', v)} type="number" placeholder="8" />
