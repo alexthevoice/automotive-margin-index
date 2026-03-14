@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 
-const VERSION = "1.101";
+const VERSION = "1.104";
 
 const STEPS = [
   { id: 0, label: "Anagrafica", icon: "◆" },
@@ -10,7 +10,7 @@ const STEPS = [
   { id: 4, label: "Autovalutazione", icon: "◎" },
 ];
 
-const WEIGHTS = { marginalita: 0.40, servizi: 0.25, stock: 0.20, produttivita: 0.15 };
+const WEIGHTS = { marginalita: 0.35, servizi: 0.30, stock: 0.20, produttivita: 0.15 };
 
 const CLASSI = [
   { min: 0, max: 39, label: "Zona Critica", color: "#D44040", bg: "rgba(212,64,64,0.08)", emoji: "▼" },
@@ -66,23 +66,23 @@ function getClasse(score) {
 }
 
 function calculateScores(data) {
-  // Marginalità — valori in € per veicolo
+  // Marginalità (peso 35%) — valori in € per veicolo
   const margineVeicolo = parseFloat(data.margine_veicolo) || 0;
   const margineServizi = parseFloat(data.margine_servizi) || 0;
-  const margineTotale = margineVeicolo + margineServizi; // calcolato internamente
+  const margineTotale = margineVeicolo + margineServizi;
 
-  const s_mv = normalize(margineVeicolo, 200, 2000, true);
-  const s_ms = normalize(margineServizi, 100, 1200, true);
-  const s_mt = normalize(margineTotale, 300, 3200, true);
-  const score_marginalita = s_mv * 0.35 + s_ms * 0.35 + s_mt * 0.30;
+  const s_mv = normalize(margineVeicolo, 200, 3000, true);
+  const s_ms = normalize(margineServizi, 200, 3000, true);
+  const s_mt = normalize(margineTotale, 500, 6000, true);
+  const score_marginalita = s_mv * 0.30 + s_ms * 0.30 + s_mt * 0.40;
 
-  // Servizi F&I — penetrazione %
-  const s_fin = normalize(parseFloat(data.penetrazione_fin) || 0, 15, 75, true);
-  const s_ass = normalize(parseFloat(data.penetrazione_ass) || 0, 5, 55, true);
-  const s_gar = normalize(parseFloat(data.penetrazione_gar) || 0, 3, 45, true);
-  const score_servizi = s_fin * 0.40 + s_ass * 0.30 + s_gar * 0.30;
+  // Servizi F&I (peso 30%) — penetrazione %
+  const s_fin = normalize(parseFloat(data.penetrazione_fin) || 0, 10, 90, true);
+  const s_ass = normalize(parseFloat(data.penetrazione_ass) || 0, 5, 90, true);
+  const s_gar = normalize(parseFloat(data.penetrazione_gar) || 0, 3, 90, true);
+  const score_servizi = s_fin * 0.40 + s_ass * 0.40 + s_gar * 0.20;
 
-  // Stock
+  // Stock (peso 20%)
   const s_gs = normalize(parseFloat(data.giorni_stock) || 60, 15, 120, false);
   const volume = parseFloat(data.volume_vendite) || 1;
   const stockMedio = parseFloat(data.stock_medio) || 1;
@@ -90,10 +90,10 @@ function calculateScores(data) {
   const s_rot = normalize(rotazione, 2, 12, true);
   const score_stock = s_gs * 0.55 + s_rot * 0.45;
 
-  // Produttività
+  // Produttività (peso 15%)
   const venditori = parseFloat(data.venditori) || 1;
   const vpv = volume / Math.max(venditori, 1);
-  const s_vpv = normalize(vpv, 30, 130, true);
+  const s_vpv = normalize(vpv, 50, 200, true);
   const addetti = parseFloat(data.addetti) || 1;
   const efficienza = volume / Math.max(addetti, 1);
   const s_eff = normalize(efficienza, 15, 60, true);
@@ -467,8 +467,8 @@ function ResultsDashboard({ scores, insights, data, animate, onReset, containerR
         {/* 4 Areas */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 24 }}>
           {[
-            { label: "Marginalità", score: scores.score_marginalita, weight: "40%", icon: "◆" },
-            { label: "Servizi F&I", score: scores.score_servizi, weight: "25%", icon: "◈" },
+            { label: "Marginalità", score: scores.score_marginalita, weight: "35%", icon: "◆" },
+            { label: "Servizi F&I", score: scores.score_servizi, weight: "30%", icon: "◈" },
             { label: "Stock", score: scores.score_stock, weight: "20%", icon: "◇" },
             { label: "Produttività", score: scores.score_produttivita, weight: "15%", icon: "▣" },
           ].map((area, i) => {
@@ -542,7 +542,7 @@ function ResultsDashboard({ scores, insights, data, animate, onReset, containerR
           <div style={{ fontSize: 10, letterSpacing: 2, color: C.gold, marginBottom: 8 }}>PROSSIMO PASSO</div>
           <div style={{ fontSize: 16, color: C.white, marginBottom: 8, fontWeight: 700 }}>Trasforma questo benchmark in un piano d'azione</div>
           <div style={{ fontSize: 13, color: C.textSecondary, lineHeight: 1.6, marginBottom: 20 }}>Una giornata di allineamento direzionale per analizzare i risultati, identificare le leve prioritarie e definire un piano operativo di miglioramento.</div>
-          <button style={{ padding: '14px 32px', background: C.gold, border: 'none', borderRadius: 8, color: C.bg, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', letterSpacing: 0.3 }}>Richiedi una consulenza →</button>
+          <a href="https://alessandrotasso.it/appuntamento-automotive" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', padding: '14px 32px', background: C.gold, border: 'none', borderRadius: 8, color: C.bg, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', letterSpacing: 0.3, textDecoration: 'none' }}>Richiedi una consulenza →</a>
         </div>
 
         <div style={{ textAlign: 'center', marginTop: 28, marginBottom: 20 }}>
