@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 
-const VERSION = "1.108";
+const VERSION = "1.109";
 
 const STEPS = [
   { id: 0, label: "Anagrafica", icon: "◆" },
@@ -200,6 +200,36 @@ async function submitToAirtable(data, scores) {
   } catch (err) {
     console.error('Airtable submission error:', err);
     return { success: false, error: err.message };
+  }
+}
+
+/* ── Fetch Rankings from Airtable ── */
+async function fetchRankings(currentScores) {
+  try {
+    const res = await fetch('/api/rankings');
+    const data = await res.json();
+    if (!res.ok || !data.success) return null;
+
+    const total = data.total;
+    const allScores = data.scores;
+
+    // Calculate position (1 = best)
+    const getPosition = (field, value) => {
+      const sorted = allScores.map(s => s[field]).sort((a, b) => b - a);
+      const pos = sorted.findIndex(s => value >= s);
+      return { position: pos === -1 ? total : pos + 1, total };
+    };
+
+    return {
+      ami: getPosition('ami', currentScores.ami),
+      marginalita: getPosition('marginalita', currentScores.score_marginalita),
+      servizi: getPosition('servizi', currentScores.score_servizi),
+      stock: getPosition('stock', currentScores.score_stock),
+      produttivita: getPosition('produttivita', currentScores.score_produttivita),
+    };
+  } catch (err) {
+    console.error('Rankings fetch error:', err);
+    return null;
   }
 }
 
@@ -419,7 +449,7 @@ function StepAutovalutazione({ data, updateField, togglePerdita }) {
    RESULTS DASHBOARD
    ═══════════════════════════════════════ */
 
-function ResultsDashboard({ scores, insights, data, animate, onReset, containerRef, airtableStatus }) {
+function ResultsDashboard({ scores, insights, data, animate, onReset, containerRef, airtableStatus, rankings }) {
   const classe = getClasse(scores.ami);
   const tc = { critical: '#D44040', warning: '#E8923F', good: '#E8A838', excellent: '#4DAF6A' };
   const tl = { critical: 'CRITICO', warning: 'ATTENZIONE', good: 'POSITIVO', excellent: 'ECCELLENTE' };
@@ -488,6 +518,43 @@ function ResultsDashboard({ scores, insights, data, animate, onReset, containerR
           })}
         </div>
 
+        {/* Rankings */}
+        {rankings && (
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ fontSize: 10, letterSpacing: 2.5, color: C.gold, textTransform: 'uppercase', fontWeight: 700, marginBottom: 12 }}>La tua posizione in classifica</div>
+            <div style={{ background: C.bgLight, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px 18px' }}>
+              {/* Main ranking */}
+              <div style={{ textAlign: 'center', marginBottom: 16, paddingBottom: 16, borderBottom: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 11, color: C.textSecondary, marginBottom: 6 }}>CLASSIFICA GENERALE</div>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 4 }}>
+                  <span style={{ fontSize: 36, fontWeight: 900, color: C.gold }}>{rankings.ami.position}°</span>
+                  <span style={{ fontSize: 16, color: C.textMuted }}>su {rankings.ami.total}</span>
+                </div>
+                <div style={{ fontSize: 11, color: C.textSecondary, marginTop: 4 }}>concessionarie nel database</div>
+              </div>
+              {/* Sub rankings */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                {[
+                  { label: "Marginalità", icon: "◆", rank: rankings.marginalita },
+                  { label: "Servizi F&I", icon: "◈", rank: rankings.servizi },
+                  { label: "Stock", icon: "◇", rank: rankings.stock },
+                  { label: "Produttività", icon: "▣", rank: rankings.produttivita },
+                ].map((r, i) => (
+                  <div key={i} style={{ background: C.bgCard, borderRadius: 8, padding: '12px 14px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 11, color: C.textSecondary, marginBottom: 4 }}>
+                      <span style={{ color: C.gold, marginRight: 4 }}>{r.icon}</span>{r.label}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 3 }}>
+                      <span style={{ fontSize: 22, fontWeight: 800, color: C.white }}>{r.rank.position}°</span>
+                      <span style={{ fontSize: 12, color: C.textMuted }}>/ {r.rank.total}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* KPI Detail */}
         <div style={{ fontSize: 10, letterSpacing: 2.5, color: C.gold, textTransform: 'uppercase', fontWeight: 700, marginBottom: 12 }}>Dettaglio KPI</div>
         <div style={{ background: C.bgLight, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px 18px', marginBottom: 24 }}>
@@ -545,6 +612,17 @@ function ResultsDashboard({ scores, insights, data, animate, onReset, containerR
           <a href="https://alessandrotasso.it/appuntamento-automotive" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', padding: '14px 32px', background: C.gold, border: 'none', borderRadius: 8, color: C.bg, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', letterSpacing: 0.3, textDecoration: 'none' }}>Richiedi una consulenza →</a>
         </div>
 
+        {/* Stock Performance Index */}
+        <div style={{ background: C.bgLight, border: `1px solid ${C.border}`, borderRadius: 14, padding: '28px 24px', marginTop: 16, textAlign: 'center' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: 10, background: C.gold, fontSize: 12, fontWeight: 900, color: C.bg, letterSpacing: 1, marginBottom: 12 }}>SPI</div>
+          <div style={{ fontSize: 10, letterSpacing: 2, color: C.gold, marginBottom: 8 }}>STRUMENTO COMPLEMENTARE</div>
+          <div style={{ fontSize: 16, color: C.white, marginBottom: 8, fontWeight: 700 }}>Stock Performance Index</div>
+          <div style={{ fontSize: 13, color: C.textSecondary, lineHeight: 1.6, marginBottom: 20 }}>
+            Analizza il tuo stock vetture nel dettaglio: scopri quali auto stanno performando, quali sono in difficoltà e cosa fare per migliorare vendite e marginalità su ogni singolo veicolo.
+          </div>
+          <a href="https://stock-performance-index.vercel.app/" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', padding: '12px 28px', background: 'transparent', border: `1px solid ${C.gold}`, borderRadius: 8, color: C.gold, fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', letterSpacing: 0.3, textDecoration: 'none' }}>Calcola il tuo Stock Performance Index →</a>
+        </div>
+
         <div style={{ textAlign: 'center', marginTop: 28, marginBottom: 20 }}>
           <button onClick={onReset} style={{ padding: '12px 20px', background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 8, color: C.textSecondary, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>← Nuova compilazione</button>
         </div>
@@ -562,6 +640,7 @@ export default function App() {
   const [showResults, setShowResults] = useState(false);
   const [animateScore, setAnimateScore] = useState(false);
   const [airtableStatus, setAirtableStatus] = useState(null);
+  const [rankings, setRankings] = useState(null);
   const [data, setData] = useState({
     ragione_sociale: "", provincia: "", tipologia: "", volume_vendite: "", sedi: "", venditori: "", addetti: "",
     margine_veicolo: "", margine_servizi: "",
@@ -586,10 +665,14 @@ export default function App() {
     setTimeout(() => setAnimateScore(true), 300);
     const result = await submitToAirtable(data, s);
     setAirtableStatus(result.success ? 'success' : 'error');
+
+    // Fetch rankings after submit
+    const r = await fetchRankings(s);
+    setRankings(r);
   };
 
   const handleReset = () => {
-    setCurrentStep(-1); setShowResults(false); setAnimateScore(false); setAirtableStatus(null);
+    setCurrentStep(-1); setShowResults(false); setAnimateScore(false); setAirtableStatus(null); setRankings(null);
     setScores(null); setInsights(null);
     setData({ ragione_sociale: "", provincia: "", tipologia: "", volume_vendite: "", sedi: "", venditori: "", addetti: "", margine_veicolo: "", margine_servizi: "", penetrazione_fin: "", penetrazione_ass: "", penetrazione_gar: "", giorni_stock: "", stock_medio: "", valore_stock: "", autovalutazione: "3", perdita_margine: [], consenso_anonimo: false, consenso_risultati: false });
   };
@@ -608,7 +691,7 @@ export default function App() {
   };
 
   // ── RESULTS ──
-  if (showResults && scores && insights) return (<><ResultsDashboard scores={scores} insights={insights} data={data} animate={animateScore} onReset={handleReset} containerRef={containerRef} airtableStatus={airtableStatus} /><Footer /></>);
+  if (showResults && scores && insights) return (<><ResultsDashboard scores={scores} insights={insights} data={data} animate={animateScore} onReset={handleReset} containerRef={containerRef} airtableStatus={airtableStatus} rankings={rankings} /><Footer /></>);
 
   // ── LANDING ──
   if (currentStep === -1) return (
