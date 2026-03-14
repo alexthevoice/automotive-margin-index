@@ -46,7 +46,7 @@ export default async function handler(req, res) {
 
             // Autovalutazione
             Autovalutazione: data.Autovalutazione || 3,
-            Perdita_Margine: data.Perdita_Margine || '',
+            Perdita_Margine: data.Perdita_Margine || [],
 
             // Scores calcolati
             Score_Marginalita: data.Score_Marginalita || 0,
