@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 
-const VERSION = "1.107";
+const VERSION = "1.108";
 
 const STEPS = [
   { id: 0, label: "Anagrafica", icon: "◆" },
@@ -178,7 +178,7 @@ async function submitToAirtable(data, scores) {
     Stock_Medio: parseInt(data.stock_medio) || 0,
     Valore_Stock: parseInt(data.valore_stock) || 0,
     Autovalutazione: parseInt(data.autovalutazione) || 3,
-    Perdita_Margine: data.perdita_margine.join(", "),
+    Perdita_Margine: data.perdita_margine,
     Score_Marginalita: scores.score_marginalita,
     Score_Servizi: scores.score_servizi,
     Score_Stock: scores.score_stock,
