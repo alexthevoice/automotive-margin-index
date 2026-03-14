@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 
-const VERSION = "1.110";
+const VERSION = "1.111";
 
 const STEPS = [
   { id: 0, label: "Anagrafica", icon: "◆" },
@@ -250,7 +250,7 @@ function Footer() {
 
 function Header() {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, paddingBottom: 14, borderBottom: `1px solid ${C.border}` }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, paddingBottom: 14, paddingTop: 8, borderBottom: `1px solid ${C.border}` }}>
       <div style={{ width: 36, height: 36, borderRadius: 8, background: C.gold, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 900, color: C.bg, letterSpacing: 1 }}>AMI</div>
       <div style={{ fontSize: 14, fontWeight: 600, color: C.textSecondary, letterSpacing: 1, textTransform: 'uppercase' }}>Automotive Margin Index™</div>
     </div>
@@ -698,12 +698,16 @@ export default function App() {
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || 'Codice non valido');
       setDealer(result.dealer);
-      // Pre-fill form with dealer data
+      // Pre-fill form with dealer data, matching select options
+      const matchProvincia = PROVINCE.find(p => p.toLowerCase() === (result.dealer.provincia || '').toLowerCase()) || '';
+      const tipMap = { 'dealer ufficiale': 'Dealer Ufficiale', 'dealer': 'Dealer Ufficiale', 'monomarca': 'Dealer Ufficiale', 'multimarca': 'Multimarca', 'multi marca': 'Multimarca' };
+      const rawTip = (result.dealer.tipologia || '').toLowerCase().trim();
+      const matchTipologia = tipMap[rawTip] || result.dealer.tipologia || '';
       setData(prev => ({
         ...prev,
         ragione_sociale: result.dealer.nome || '',
-        provincia: result.dealer.provincia || '',
-        tipologia: result.dealer.tipologia || '',
+        provincia: matchProvincia,
+        tipologia: matchTipologia,
         sedi: result.dealer.numero_sedi ? String(result.dealer.numero_sedi) : '',
       }));
       setAuthScreen('authenticated');
@@ -879,7 +883,7 @@ export default function App() {
   // ── FORM STEPS ──
   return (
     <div ref={containerRef} style={pageStyle}>
-      <div style={{ maxWidth: 620, margin: '0 auto', padding: '24px 20px 20px' }}>
+      <div style={{ maxWidth: 620, margin: '0 auto', padding: '32px 20px 20px' }}>
         <Header />
         <ProgressBar current={currentStep} steps={STEPS} />
         <div style={{ background: C.cardBg, borderRadius: 14, padding: '28px 24px', marginBottom: 16, color: C.cardText }}>
